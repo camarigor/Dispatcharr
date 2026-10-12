@@ -7,7 +7,7 @@ be added here.
 
 from django.db.models import Exists, OuterRef
 
-from apps.channels.models import Channel, ChannelProfileMembership
+from apps.channels.models import Channel, ChannelProfileMembership, ChannelStream
 
 ADMIN_USER_LEVEL = 10
 
@@ -106,3 +106,26 @@ def scope_by_channel_access(queryset, user, *, field="channel_id"):
         return queryset
     visible = channels_queryset_for_user(Channel.objects.all(), user)
     return queryset.filter(**{f"{field}__in": visible.values("pk")})
+
+
+def streams_queryset_for_user(queryset, user):
+    """Limit a Stream queryset to streams of channels *user* may access.
+    Admins see every stream.
+
+    A stream's URL usually carries the provider login, so a non-admin only
+    gets a stream through a channel they can watch, the same rule as
+    ``channels/<id>/streams/``. ``Exists`` keeps a stream on several visible
+    channels to one row, and drops streams on no channel at all.
+    """
+    if user is None or not getattr(user, "is_authenticated", False):
+        return queryset.none()
+    if is_admin_user(user):
+        return queryset
+    visible = channels_queryset_for_user(Channel.objects.all(), user)
+    return queryset.filter(
+        Exists(
+            ChannelStream.objects.filter(
+                stream_id=OuterRef("pk"), channel__in=visible.values("pk")
+            )
+        )
+    )

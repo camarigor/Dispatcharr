@@ -30,6 +30,7 @@ from apps.channels.access import (
     channels_queryset_for_user,
     is_admin_user,
     scope_by_channel_access,
+    streams_queryset_for_user,
     user_may_use_profile,
 )
 from apps.channels.dvr_access import (
@@ -203,7 +204,7 @@ class StreamViewSet(viewsets.ModelViewSet):
         return permissions_for_action(self)
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = streams_queryset_for_user(super().get_queryset(), self.request.user)
         # Exclude streams from inactive M3U accounts
         qs = qs.exclude(m3u_account__is_active=False)
 
@@ -676,7 +677,9 @@ class StreamViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        streams = Stream.objects.filter(id__in=ids)
+        streams = streams_queryset_for_user(
+            Stream.objects.filter(id__in=ids), request.user
+        )
         serializer = self.get_serializer(streams, many=True)
         return Response(serializer.data)
 
